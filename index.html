@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>eBay Auth Callback</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #0f0f0f;
+    color: #e0e0e0;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2rem;
+  }
+  .card {
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    border-radius: 12px;
+    padding: 2.5rem;
+    max-width: 560px;
+    width: 100%;
+    text-align: center;
+  }
+  .icon { font-size: 3rem; margin-bottom: 1rem; }
+  h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; color: #fff; }
+  p { color: #999; line-height: 1.6; margin-bottom: 1.5rem; }
+  .token-box {
+    background: #111;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 1rem;
+    font-family: 'Courier New', monospace;
+    font-size: 0.75rem;
+    word-break: break-all;
+    text-align: left;
+    color: #4ade80;
+    margin-bottom: 1.5rem;
+    max-height: 120px;
+    overflow-y: auto;
+  }
+  .token-label { font-size: 0.7rem; color: #666; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 0.5rem; }
+  .btn {
+    background: #2563eb;
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    padding: 0.75rem 1.5rem;
+    font-size: 0.9rem;
+    font-weight: 500;
+    cursor: pointer;
+    width: 100%;
+    margin-bottom: 0.75rem;
+    transition: background 0.2s;
+  }
+  .btn:hover { background: #1d4ed8; }
+  .btn.secondary { background: #1e293b; color: #94a3b8; border: 1px solid #334155; }
+  .btn.secondary:hover { background: #263348; }
+  .status { display: inline-block; padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600; margin-bottom: 1.5rem; }
+  .status.success { background: #14532d; color: #4ade80; }
+  .status.error { background: #450a0a; color: #f87171; }
+  .hidden { display: none; }
+  .params-grid { display: grid; gap: 0.5rem; text-align: left; margin-bottom: 1.5rem; }
+  .param-row { display: flex; justify-content: space-between; font-size: 0.8rem; padding: 0.4rem 0.75rem; background: #111; border-radius: 6px; }
+  .param-key { color: #666; }
+  .param-val { color: #ccc; font-family: monospace; }
+  .copied { color: #4ade80 !important; }
+</style>
+</head>
+<body>
+<div class="card">
+  <div id="success-view">
+    <div class="icon">✅</div>
+    <h1>Authorization Successful</h1>
+    <p>Your eBay account has been authorized. Copy the token below and paste it into your script.</p>
+    <span class="status success" id="status-badge">Connected</span>
+    <div class="params-grid" id="params-grid"></div>
+    <div class="token-label">OAuth Access Token</div>
+    <div class="token-box" id="token-display">Extracting token...</div>
+    <button class="btn" onclick="copyToken()">📋 Copy Token</button>
+    <button class="btn secondary" onclick="copyAll()">📄 Copy All Parameters</button>
+  </div>
+  <div id="error-view" class="hidden">
+    <div class="icon">❌</div>
+    <h1>Authorization Declined</h1>
+    <p>You did not grant access. Close this page and try again from the eBay Developer Portal.</p>
+    <span class="status error">Access Denied</span>
+  </div>
+</div>
+
+<script>
+  const params = new URLSearchParams(window.location.search);
+  const hashParams = new URLSearchParams(window.location.hash.replace('#',''));
+  const allParams = new URLSearchParams([...params, ...hashParams]);
+
+  const isSuccess = window.location.href.includes('isAuthSuccessful=true') || 
+                    allParams.get('isAuthSuccessful') === 'true' ||
+                    allParams.has('code') || allParams.has('access_token') ||
+                    allParams.has('ebaytkn');
+
+  const isDeclined = window.location.href.includes('isAuthSuccessful=false') ||
+                     allParams.get('isAuthSuccessful') === 'false';
+
+  if (isDeclined) {
+    document.getElementById('success-view').classList.add('hidden');
+    document.getElementById('error-view').classList.remove('hidden');
+  } else {
+    // Show all params
+    const grid = document.getElementById('params-grid');
+    const interesting = ['code','access_token','token_type','expires_in','ebaytkn','tknexp','username','scope'];
+    let tokenValue = '';
+
+    allParams.forEach((val, key) => {
+      const row = document.createElement('div');
+      row.className = 'param-row';
+      const shortVal = val.length > 40 ? val.substring(0,40)+'...' : val;
+      row.innerHTML = `<span class="param-key">${key}</span><span class="param-val">${shortVal}</span>`;
+      grid.appendChild(row);
+      if (key === 'code' || key === 'access_token' || key === 'ebaytkn') {
+        tokenValue = val;
+      }
+    });
+
+    if (!tokenValue) {
+      tokenValue = window.location.href;
+      document.getElementById('token-display').textContent = 'Full callback URL:\n\n' + tokenValue;
+    } else {
+      document.getElementById('token-display').textContent = tokenValue;
+    }
+
+    window._tokenValue = tokenValue;
+    window._allUrl = window.location.href;
+  }
+
+  function copyToken() {
+    navigator.clipboard.writeText(window._tokenValue || window.location.href).then(() => {
+      const btn = event.target;
+      btn.textContent = '✅ Copied!';
+      btn.classList.add('copied');
+      setTimeout(() => { btn.textContent = '📋 Copy Token'; btn.classList.remove('copied'); }, 2000);
+    });
+  }
+
+  function copyAll() {
+    navigator.clipboard.writeText(window._allUrl || window.location.href).then(() => {
+      const btn = event.target;
+      btn.textContent = '✅ Copied!';
+      setTimeout(() => { btn.textContent = '📄 Copy All Parameters'; }, 2000);
+    });
+  }
+</script>
+</body>
+</html>
